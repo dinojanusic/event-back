@@ -1,0 +1,11 @@
+framework:
+    messenger:
+        transports:
+            orders:
+                dsn: '%env(REDIS_MESSENGER_DSN)%'
+                # Redis stream name; the key under which jobs sit in db 1
+                options:
+                    stream: orders
+
+        routing:
+            App\Messenger\Message\SendOrderConfirmation: orders

@@ -3,16 +3,19 @@
 namespace App\Controller\Api;
 
 use App\Exception\ReservationExpiredException;
+use App\Messenger\Message\SendOrderConfirmation;
 use App\Service\OrderService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Routing\Attribute\Route;
 
 class OrderController extends AbstractController
 {
     public function __construct(
         private readonly OrderService $orderService,
+        private readonly MessageBusInterface $bus,
     ) {}
 
     #[Route('/api/v1/orders', name: 'api_v1_orders_create', methods: ['POST'])]
@@ -45,6 +48,8 @@ class OrderController extends AbstractController
                 JsonResponse::HTTP_GONE,
             );
         }
+
+        $this->bus->dispatch(new SendOrderConfirmation($orderNumber, $email));
 
         return new JsonResponse(
             ['orderNumber' => $orderNumber],
