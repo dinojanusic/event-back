@@ -45,6 +45,13 @@ services:
         public: false
         bind:
             Symfony\Contracts\Cache\TagAwareCacheInterface $apiCache: '@pimcore.cache.pool'
+            \Redis $inventoryRedis: '@redis.inventory'
+
+    redis.inventory:
+        class: \Redis
+        factory: ['Symfony\Component\Cache\Adapter\RedisAdapter', 'createConnection']
+        arguments:
+            - '%env(REDIS_INVENTORY_DSN)%'
 
     App\EventSubscriber\:
         resource: '../src/EventSubscriber'
@@ -58,6 +65,13 @@ services:
         public: true
         tags: [ 'controller.service_arguments' ]
 
+
+    #
+    # SERVICES
+    #
+
+    App\Service\:
+        resource: '../src/Service'
 
     #
     # REPOSITORIES
