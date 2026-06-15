@@ -1,0 +1,7 @@
+# Local port overrides — not committed to git
+# Exposes RabbitMQ on localhost so local PHP can reach it
+services:
+    rabbitmq:
+        ports:
+            - "5672:5672"
+            - "15672:15672"
