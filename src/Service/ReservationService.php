@@ -74,6 +74,31 @@ LUA;
     }
 
     /**
+     * Consumes a reservation for order fulfilment. Atomically deletes the key
+     * and returns its payload — but does NOT credit inventory back, because the
+     * decrement now corresponds to a confirmed sale.
+     *
+     * Returns the decoded payload on success, false if the key is already gone.
+     * Idempotent: a second call for the same UUID always returns false.
+     */
+    public function consume(string $uuid): array|false
+    {
+        $reservationKey = sprintf('reservation:%s', $uuid);
+
+        $payload = $this->inventoryRedis->eval(
+            self::LUA_RELEASE,
+            [$reservationKey],
+            1,
+        );
+
+        if ($payload === false) {
+            return false;
+        }
+
+        return json_decode($payload, true, 512, JSON_THROW_ON_ERROR);
+    }
+
+    /**
      * Releases a hold early. Idempotent: safe to call multiple times for the same UUID.
      *
      * Returns true if the reservation existed and inventory was credited back,
