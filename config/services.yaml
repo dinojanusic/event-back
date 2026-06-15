@@ -45,7 +45,7 @@ services:
         public: false
         bind:
             Symfony\Contracts\Cache\TagAwareCacheInterface $apiCache: '@pimcore.cache.pool'
-            \Redis $inventoryRedis: '@redis.inventory'
+            $inventoryRedis: '@redis.inventory'
 
     redis.inventory:
         class: \Redis
@@ -103,3 +103,15 @@ services:
     # App\EventListener\TestListener:
     #     tags:
     #         - { name: kernel.event_listener, event: pimcore.dataobject.preUpdate, method: onObjectPreUpdate }
+
+    # symfony/framework-bundle always registers this when transports are configured, even without the
+    # symfony/amazon-sqs-messenger package installed. Override with a harmless stub so the container compiles.
+    messenger.transport.sqs.factory:
+        class: stdClass
+        arguments: []
+
+    # pimcore/elasticsearch-client ships a services.yaml with broken placeholder classes that don't exist.
+    # Nothing in Pimcore's PHP code references this service; override to prevent the compilation error.
+    Pimcore\Bundle\ElasticsearchClientBundle\MyService:
+        class: stdClass
+        arguments: []

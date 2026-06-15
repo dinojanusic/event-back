@@ -70,6 +70,15 @@ LUA;
             ], JSON_THROW_ON_ERROR),
         );
 
+        // Secondary index: lets the reconciler credit back inventory after the
+        // main key expires passively (Redis TTL fires no callback to restore
+        // the counter, so without this index there is no way to know what was held).
+        $this->inventoryRedis->zAdd('reservations:pending', (float) $expiresAt, $uuid);
+        $this->inventoryRedis->hMSet(sprintf('reservation:meta:%s', $uuid), [
+            'tierId'   => $tierId,
+            'quantity' => $quantity,
+        ]);
+
         return ['uuid' => $uuid, 'expiresAt' => $expiresAt];
     }
 
@@ -94,6 +103,12 @@ LUA;
         if ($payload === false) {
             return false;
         }
+
+        // Clean up secondary index so the reconciler ignores this UUID.
+        // Non-critical: a missed cleanup is harmless — the reconciler's Lua
+        // claim script will detect meta already gone and skip it.
+        $this->inventoryRedis->zRem('reservations:pending', $uuid);
+        $this->inventoryRedis->del(sprintf('reservation:meta:%s', $uuid));
 
         return json_decode($payload, true, 512, JSON_THROW_ON_ERROR);
     }
@@ -124,6 +139,9 @@ LUA;
             sprintf('tier:%d:available', $data['tierId']),
             $data['quantity'],
         );
+
+        $this->inventoryRedis->zRem('reservations:pending', $uuid);
+        $this->inventoryRedis->del(sprintf('reservation:meta:%s', $uuid));
 
         return true;
     }
