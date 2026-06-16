@@ -7,17 +7,34 @@ use App\Service\ReservationService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\Routing\Attribute\Route;
 
 class ReservationController extends AbstractController
 {
     public function __construct(
         private readonly ReservationService $reservationService,
+        private readonly RateLimiterFactory $reservationCreateLimiter,
     ) {}
 
     #[Route('/api/v1/reservations', name: 'api_v1_reservations_create', methods: ['POST'])]
     public function create(Request $request): JsonResponse
     {
+        $limit = $this->reservationCreateLimiter->create($request->getClientIp())->consume(1);
+
+        if (!$limit->isAccepted()) {
+            $retryAfter = $limit->getRetryAfter()->getTimestamp() - time();
+
+            return new JsonResponse(
+                ['error' => 'Too many requests. Please slow down.'],
+                JsonResponse::HTTP_TOO_MANY_REQUESTS,
+                [
+                    'X-RateLimit-Remaining' => 0,
+                    'Retry-After'           => $retryAfter,
+                ],
+            );
+        }
+
         $body = json_decode($request->getContent(), true);
 
         $tierId   = $body['tierId'] ?? null;

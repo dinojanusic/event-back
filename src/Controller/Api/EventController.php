@@ -18,6 +18,7 @@ class EventController extends AbstractController
         private readonly EventRepository $eventRepository,
         private readonly TicketTierRepository $ticketTierRepository,
         private readonly TagAwareCacheInterface $apiCache,
+        private readonly \Redis $inventoryRedis,
     ) {
     }
 
@@ -82,6 +83,13 @@ class EventController extends AbstractController
         if ($data === null) {
             return new JsonResponse(['error' => 'Event not found'], JsonResponse::HTTP_NOT_FOUND);
         }
+
+        // Merge live Redis counters outside the cache — these change on every reservation.
+        foreach ($data['ticketTiers'] as &$tier) {
+            $raw = $this->inventoryRedis->get(sprintf('tier:%d:available', $tier['id']));
+            $tier['available'] = $raw !== false ? (int) $raw : null;
+        }
+        unset($tier);
 
         return new JsonResponse($data);
     }
