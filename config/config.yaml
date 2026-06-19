@@ -126,10 +126,9 @@ framework:
 #        handler_id: null
 
 #### SYMFONY MAILER TRANSPORTS
-#    mailer:
-#        transports:
-#            main: smtp://user:pass@smtp.example.com:port
-#            pimcore_newsletter: smtp://user:pass@smtp.example.com:port
+    mailer:
+        transports:
+            main: '%env(MAILER_DSN)%'
 
 # pimcore_newsletter:
 #     default_url_prefix: 'https://my-host.com' # default prefix for your static assets

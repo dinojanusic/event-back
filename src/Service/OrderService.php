@@ -3,14 +3,17 @@
 namespace App\Service;
 
 use App\Exception\ReservationExpiredException;
+use App\Messenger\Message\SendOrderConfirmation;
 use Pimcore\Model\DataObject\Order;
 use Pimcore\Model\DataObject\Service as DataObjectService;
 use Pimcore\Model\DataObject\TicketTier;
+use Symfony\Component\Messenger\MessageBusInterface;
 
 class OrderService
 {
     public function __construct(
         private readonly ReservationService $reservationService,
+        private readonly MessageBusInterface $bus,
     ) {}
 
     /**
@@ -74,6 +77,19 @@ class OrderService
         $order->setQuantity($data['quantity']);
         $order->setTotalPrice((string) $totalPrice);
         $order->save();
+
+        $event = $tier->getEvent();
+        $this->bus->dispatch(new SendOrderConfirmation(
+            orderNumber: $orderNumber,
+            email: $email,
+            tierName: $tier->getName() ?? '',
+            eventName: $event?->getName() ?? '',
+            eventStartDate: $event?->getStartDate(),
+            venueName: $event?->getVenue()?->getName() ?? '',
+            quantity: $data['quantity'],
+            totalPrice: number_format($totalPrice, 2),
+            currency: $tier->getCurrency() ?? 'USD',
+        ));
 
         return $orderNumber;
     }

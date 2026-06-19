@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order Confirmation</title>
+    <style>
+        body { margin: 0; padding: 0; background: #f4f4f5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #18181b; }
+        .wrapper { max-width: 560px; margin: 40px auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+        .header { background: #18181b; padding: 32px 40px; text-align: center; }
+        .header h1 { margin: 0; color: #ffffff; font-size: 20px; font-weight: 600; letter-spacing: -0.3px; }
+        .body { padding: 40px; }
+        .order-number { display: inline-block; background: #f4f4f5; border-radius: 6px; padding: 10px 16px; font-family: 'Courier New', monospace; font-size: 18px; font-weight: 700; letter-spacing: 1px; color: #18181b; margin-bottom: 32px; }
+        .section-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: #71717a; margin-bottom: 4px; }
+        .section-value { font-size: 16px; font-weight: 500; color: #18181b; margin-bottom: 24px; }
+        .divider { border: none; border-top: 1px solid #e4e4e7; margin: 24px 0; }
+        .total-row { display: flex; justify-content: space-between; align-items: baseline; }
+        .total-label { font-size: 14px; color: #71717a; }
+        .total-value { font-size: 22px; font-weight: 700; color: #18181b; }
+        .footer { padding: 24px 40px; background: #fafafa; border-top: 1px solid #e4e4e7; text-align: center; }
+        .footer p { margin: 0; font-size: 13px; color: #71717a; line-height: 1.6; }
+    </style>
+</head>
+<body>
+<div class="wrapper">
+    <div class="header">
+        <h1>You're going! 🎉</h1>
+    </div>
+    <div class="body">
+        <p style="margin-top:0; color:#71717a; font-size:14px;">Hi {{ message.email }}, your order is confirmed.</p>
+
+        <div class="order-number">{{ message.orderNumber }}</div>
+
+        <div class="section-label">Event</div>
+        <div class="section-value">{{ message.eventName }}</div>
+
+        {% if message.eventStartDate %}
+        <div class="section-label">Date</div>
+        <div class="section-value">{{ message.eventStartDate|date('l, F j, Y') }}</div>
+        {% endif %}
+
+        {% if message.venueName %}
+        <div class="section-label">Venue</div>
+        <div class="section-value">{{ message.venueName }}</div>
+        {% endif %}
+
+        <hr class="divider">
+
+        <div class="section-label">Ticket</div>
+        <div class="section-value">{{ message.tierName }} &times; {{ message.quantity }}</div>
+
+        <hr class="divider">
+
+        <div class="total-row">
+            <span class="total-label">Total paid</span>
+            <span class="total-value">{{ message.currency }} {{ message.totalPrice }}</span>
+        </div>
+    </div>
+    <div class="footer">
+        <p>Keep this email as your proof of purchase.<br>See you there!</p>
+    </div>
+</div>
+</body>
+</html>

@@ -46,6 +46,8 @@ services:
         bind:
             Symfony\Contracts\Cache\TagAwareCacheInterface $apiCache: '@pimcore.cache.pool'
             $inventoryRedis: '@redis.inventory'
+            $senderEmail: '%env(MAILER_SENDER_EMAIL)%'
+            $senderName: '%env(MAILER_SENDER_NAME)%'
 
     redis.inventory:
         class: \Redis
@@ -88,6 +90,9 @@ services:
     App\Command\:
         resource: '../src/Command/*'
         tags: [ 'console.command' ]
+
+    App\Messenger\:
+        resource: '../src/Messenger'
 
 
 
