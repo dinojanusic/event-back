@@ -1,0 +1,12 @@
+FROM nginx:stable-alpine
+
+RUN apk add --no-cache gettext
+
+COPY .docker/nginx.conf /etc/nginx/nginx.template.conf
+# Copy committed static files so nginx can serve CSS/JS/images directly
+COPY public /var/www/html/public
+
+EXPOSE 80
+# envsubst replaces only the two Railway-specific placeholders;
+# all other $nginx_variables are left untouched thanks to the explicit list
+CMD ["/bin/sh", "-c", "envsubst '${PHP_FPM_HOST} ${MERCURE_HOST}' < /etc/nginx/nginx.template.conf > /etc/nginx/nginx.conf && nginx -g 'daemon off;'"]

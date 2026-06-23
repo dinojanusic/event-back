@@ -1,0 +1,8 @@
+vendor/
+var/
+.env.local
+.env.test
+.env.*.local
+tests/
+docker-compose*.yaml
+*.md
