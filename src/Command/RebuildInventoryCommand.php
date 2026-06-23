@@ -27,9 +27,6 @@ class RebuildInventoryCommand extends Command
     {
         $io = new SymfonyStyle($input, $output);
 
-        // One aggregate query: sum confirmed quantities grouped by tier.
-        // Joining object_store_order (flat field storage) with the relations table
-        // avoids loading every Order object into PHP memory.
         $rows = Db::get()->fetchAllAssociative(
             'SELECT r.dest_id AS tier_id, COALESCE(SUM(s.quantity), 0) AS total_sold
              FROM object_relations_order r

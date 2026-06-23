@@ -32,8 +32,6 @@ class InventorySeeder implements EventSubscriberInterface
             return;
         }
 
-        // Read the persisted published flag directly — avoids loading the full object
-        // and avoids polluting Pimcore's runtime object cache mid-save.
         $published = (bool) \Pimcore\Db::get()->fetchOne(
             'SELECT published FROM objects WHERE id = ?',
             [$object->getId()],

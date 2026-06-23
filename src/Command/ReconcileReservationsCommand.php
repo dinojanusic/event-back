@@ -18,18 +18,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 )]
 class ReconcileReservationsCommand extends Command
 {
-    /**
-     * Atomically claims an expired reservation's metadata so inventory can be credited.
-     *
-     * Returns:
-     *   0             – main reservation key still exists; TTL has not yet fired, skip
-     *   false         – meta key already gone; claimed by a concurrent run or cleaned up
-     *                   by consume/release — safe to remove from the pending index
-     *   [tierId, qty] – claimed successfully; caller must INCRBY the tier counter
-     *
-     * Atomicity prevents double-crediting when two reconciler processes overlap:
-     * only the first eval that finds the meta key will delete it and return data.
-     */
+
     private const LUA_CLAIM_EXPIRED = <<<'LUA'
 local reservation_key = KEYS[1]
 local meta_key        = KEYS[2]
@@ -72,7 +61,6 @@ LUA;
 
     private function creditExpiredReservations(SymfonyStyle $io, int $now): void
     {
-        // Reservations whose expiresAt score is in the past
         $expiredUuids = $this->inventoryRedis->zRangeByScore(
             'reservations:pending',
             '-inf',
@@ -97,12 +85,10 @@ LUA;
             );
 
             if ($result === 0) {
-                // Main key still lives (Redis TTL slightly behind wall clock); leave it
                 continue;
             }
 
             if ($result === false) {
-                // Meta already gone — consumed, released, or claimed by another process
                 $this->inventoryRedis->zRem('reservations:pending', $uuid);
                 continue;
             }
@@ -219,8 +205,6 @@ LUA;
             );
 
             if ($fields === false || $fields['tierId'] === false) {
-                // Meta cleaned up between the zRangeByScore scan and this hMGet;
-                // the tiny race is harmless — Phase 2 will still catch any residual drift.
                 continue;
             }
 

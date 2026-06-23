@@ -70,9 +70,6 @@ LUA;
             ], JSON_THROW_ON_ERROR),
         );
 
-        // Secondary index: lets the reconciler credit back inventory after the
-        // main key expires passively (Redis TTL fires no callback to restore
-        // the counter, so without this index there is no way to know what was held).
         $this->inventoryRedis->zAdd('reservations:pending', (float) $expiresAt, $uuid);
         $this->inventoryRedis->hMSet(sprintf('reservation:meta:%s', $uuid), [
             'tierId'   => $tierId,

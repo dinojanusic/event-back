@@ -99,11 +99,6 @@ class OrderService
 
     /**
      * Cancels a confirmed order and credits inventory back.
-     *
-     * The reservation key was atomically consumed in placeOrder(), so there is no
-     * Redis reservation to release. Inventory is credited directly via INCRBY,
-     * mirroring the logic in ReservationService::release().
-     *
      * @throws OrderNotFoundException         if the order does not exist
      * @throws OrderAlreadyCancelledException if the order is already cancelled
      */
