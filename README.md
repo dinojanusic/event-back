@@ -152,6 +152,11 @@ docker compose run --rm test-php vendor/bin/codecept run -vv
 | `POST` | `/api/v1/reservations` | — | Hold tickets (rate-limited 5/min/IP) |
 | `DELETE` | `/api/v1/reservations/{uuid}` | — | Release a hold early |
 | `POST` | `/api/v1/orders` | — | Convert a hold into a confirmed order |
+| `GET` | `/api/v1/orders/{orderNumber}` | — | Look up an order by number + email |
+| `GET` | `/api/v1/admin/orders` | `X-Admin-Key` | Paginated order list (filterable by status) |
+| `GET` | `/api/v1/admin/orders/{orderNumber}` | `X-Admin-Key` | Order detail |
+| `POST` | `/api/v1/admin/orders/{orderNumber}/cancel` | `X-Admin-Key` | Cancel an order and credit inventory |
+| `GET` | `/api/v1/admin/inventory` | `X-Admin-Key` | Paginated live inventory across all tiers |
 
 ### POST /api/v1/reservations
 
@@ -180,6 +185,56 @@ docker compose run --rm test-php vendor/bin/codecept run -vv
 
 // 410 Gone — reservation expired or already consumed
 { "error": "Reservation has expired or does not exist. Please reserve again." }
+```
+
+### GET /api/v1/orders/{orderNumber}
+
+Buyer-facing order lookup. Returns order detail only when the supplied `email` query parameter matches the address on the order — prevents order number enumeration.
+
+```
+GET /api/v1/orders/ORD-1A2B3C4D5E?email=buyer@example.com
+```
+
+```json
+// 200 OK
+{
+  "orderNumber": "ORD-1A2B3C4D5E",
+  "status": "confirmed",
+  "quantity": 2,
+  "totalPrice": "120.00",
+  "currency": "USD",
+  "tierName": "General Admission",
+  "eventName": "Summer Festival",
+  "eventStartDate": "2025-08-01T18:00:00+00:00",
+  "eventSlug": "summer-festival",
+  "venueName": "City Arena"
+}
+
+// 404 Not Found — order does not exist or email does not match
+{ "error": "Order not found" }
+```
+
+### Admin endpoints
+
+All admin endpoints require the `X-Admin-Key` header matching the `ADMIN_API_KEY` env variable. Missing or invalid keys return `401 Unauthorized`.
+
+```json
+// GET /api/v1/admin/orders?page=1&status=confirmed
+{
+  "data": [ { "orderNumber": "…", "email": "…", "status": "confirmed", … } ],
+  "page": 1, "pageSize": 15, "total": 42, "totalPages": 3
+}
+
+// POST /api/v1/admin/orders/{orderNumber}/cancel
+// 200 OK — returns full order detail with status "cancelled"
+// 404 — order not found
+// 409 — order already cancelled
+
+// GET /api/v1/admin/inventory?page=1
+{
+  "data": [ { "tierId": 1, "tierName": "GA", "quota": 500, "available": 237, … } ],
+  "page": 1, "pageSize": 15, "total": 4, "totalPages": 1
+}
 ```
 
 ---
@@ -315,6 +370,34 @@ Add to crontab or system scheduler:
 
 ---
 
+## Admin API
+
+The `AdminController` exposes staff-only endpoints under `/api/v1/admin/`. Authentication is a static shared secret passed as `X-Admin-Key: <value>` on every request. The key is configured via the `ADMIN_API_KEY` environment variable; any request with a missing or mismatched key receives a `401 Unauthorized` response.
+
+Key behaviors:
+- Orders list supports `?status=confirmed|cancelled|pending|expired` filtering and is paginated at 15 rows per page.
+- Cancel (`POST /admin/orders/{orderNumber}/cancel`) marks the order `cancelled` in Pimcore and immediately credits inventory back to `tier:{id}:available` in Redis via `INCRBY`, mirroring the same credit logic used by `ReservationService::release()`.
+- `409 Conflict` is returned if a cancel is attempted on an already-cancelled order.
+- The inventory endpoint reads live Redis counters alongside Pimcore `TicketTier` objects and returns quota, available count, and utilization data per tier.
+
+---
+
+## Event Subscribers
+
+### CacheInvalidationSubscriber
+
+Listens to Pimcore `POST_ADD`, `POST_UPDATE`, and `POST_DELETE` events. When an `Event` object changes, it invalidates the `api_events_list` and `api_event_{slug}` cache tags. When a `TicketTier` changes, it invalidates the cache tag for its parent event. This ensures the event-list and event-detail endpoints never serve stale data after admin edits.
+
+### InventorySeeder
+
+Listens to `PRE_UPDATE` and `POST_UPDATE`/`POST_ADD` events on `TicketTier` objects. When a tier transitions from unpublished to published (or is first created published), it writes `SET tier:{id}:available <quota>` to Redis automatically. This removes the need to run `app:inventory:rebuild` after routine tier publishing in the Pimcore admin.
+
+### CorsSubscriber
+
+Adds the necessary `Access-Control-Allow-*` headers to all API responses to allow the Vite dev server (and any other configured origin) to make cross-origin requests during development.
+
+---
+
 ## Project Structure
 
 ```
@@ -322,20 +405,32 @@ src/
 ├── Controller/Api/
 │   ├── EventController.php        # GET /api/v1/events[/{slug}]
 │   ├── ReservationController.php  # POST/DELETE /api/v1/reservations
-│   └── OrderController.php        # POST /api/v1/orders
+│   ├── OrderController.php        # POST /api/v1/orders, GET /api/v1/orders/{orderNumber}
+│   └── AdminController.php        # Admin endpoints (orders list/detail/cancel, inventory)
 ├── Service/
 │   ├── ReservationService.php     # Lua scripts, Redis key management
-│   └── OrderService.php           # consume-first order creation
+│   └── OrderService.php           # consume-first order creation + order cancellation
+├── EventSubscriber/
+│   ├── CacheInvalidationSubscriber.php  # Invalidates API cache tags on Pimcore object save/delete
+│   ├── CorsSubscriber.php               # CORS response headers
+│   └── InventorySeeder.php              # Seeds Redis counter when a TicketTier is published
 ├── Command/
-│   └── ReconcileReservationsCommand.php
-├── Messenger/Message/
-│   └── SendOrderConfirmation.php  # Async email job
+│   ├── ReconcileReservationsCommand.php
+│   ├── RebuildInventoryCommand.php      # app:inventory:rebuild — full counter rebuild
+│   └── LoadFixturesCommand.php          # app:fixtures:load — demo data for development
+├── Messenger/
+│   ├── Message/
+│   │   └── SendOrderConfirmation.php
+│   └── Handler/
+│       └── SendOrderConfirmationHandler.php
 ├── Repository/
 │   ├── EventRepository.php
 │   └── TicketTierRepository.php
 └── Exception/
     ├── InsufficientInventoryException.php
-    └── ReservationExpiredException.php
+    ├── ReservationExpiredException.php
+    ├── OrderNotFoundException.php
+    └── OrderAlreadyCancelledException.php
 
 var/classes/DataObject/
 ├── Event.php       # Pimcore-generated model
