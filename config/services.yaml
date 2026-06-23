@@ -48,6 +48,8 @@ services:
             $inventoryRedis: '@redis.inventory'
             $senderEmail: '%env(MAILER_SENDER_EMAIL)%'
             $senderName: '%env(MAILER_SENDER_NAME)%'
+            $adminApiKey: '%env(ADMIN_API_KEY)%'
+            $corsAllowOrigin: '%env(CORS_ALLOW_ORIGIN)%'
 
     redis.inventory:
         class: \Redis

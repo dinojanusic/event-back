@@ -2,6 +2,8 @@
 
 namespace App\Service;
 
+use App\Exception\OrderAlreadyCancelledException;
+use App\Exception\OrderNotFoundException;
 use App\Exception\ReservationExpiredException;
 use App\Messenger\Message\SendOrderConfirmation;
 use Pimcore\Model\DataObject\Order;
@@ -14,6 +16,7 @@ class OrderService
     public function __construct(
         private readonly ReservationService $reservationService,
         private readonly MessageBusInterface $bus,
+        private readonly \Redis $inventoryRedis,
     ) {}
 
     /**
@@ -92,6 +95,45 @@ class OrderService
         ));
 
         return $orderNumber;
+    }
+
+    /**
+     * Cancels a confirmed order and credits inventory back.
+     *
+     * The reservation key was atomically consumed in placeOrder(), so there is no
+     * Redis reservation to release. Inventory is credited directly via INCRBY,
+     * mirroring the logic in ReservationService::release().
+     *
+     * @throws OrderNotFoundException         if the order does not exist
+     * @throws OrderAlreadyCancelledException if the order is already cancelled
+     */
+    public function cancelOrder(string $orderNumber): Order
+    {
+        /** @var Order|null $order */
+        $order = Order::getByOrderNumber($orderNumber, 1);
+
+        if ($order === null) {
+            throw new OrderNotFoundException($orderNumber);
+        }
+
+        if ($order->getStatus() === 'cancelled') {
+            throw new OrderAlreadyCancelledException($orderNumber);
+        }
+
+        $order->setStatus('cancelled');
+        $order->save();
+
+        $tier     = $order->getTier();
+        $quantity = (int) $order->getQuantity();
+
+        if ($tier !== null && $quantity > 0) {
+            $this->inventoryRedis->incrBy(
+                sprintf('tier:%d:available', $tier->getId()),
+                $quantity,
+            );
+        }
+
+        return $order;
     }
 
     private function generateOrderNumber(): string
